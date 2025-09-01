@@ -1,5 +1,6 @@
 # mobile-massage
 
+⚠️Waring: This html file is not tested, I don't know will it work, because I don't have an Android device.
 A lightweight web-based mobile massage simulator using the Vibration API.
 Adjust total duration, pulse length, rest interval and repeat count. Works best on Android Chrome/Edge/Firefox. iOS Safari does not support `navigator.vibrate`.
 
