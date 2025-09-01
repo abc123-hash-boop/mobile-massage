@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>手机按摩（Vibration API）</title>
+  <style>
+    :root{
+      --bg:#0b0f14; --card:#111827; --muted:#6b7280; --fg:#e5e7eb; --accent:#22d3ee; --danger:#f87171;
+    }
+    html,body{height:100%}
+    body{
+      margin:0; font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial;
+      color:var(--fg); background: radial-gradient(1200px 600px at 50% -10%, #0e1726, var(--bg));
+      display:flex; align-items:center; justify-content:center; padding:16px;
+    }
+    .app{
+      width:min(720px, 100%); background:rgba(17,24,39,.8);
+      backdrop-filter: blur(8px); border:1px solid #1f2937;
+      border-radius: 20px; padding:18px 16px 14px; box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    }
+    h1{margin:6px 0 10px; font-size:20px; font-weight:700; letter-spacing:.5px}
+    .grid{display:grid; grid-template-columns:1fr; gap:14px}
+    @media (min-width:640px){ .grid{grid-template-columns:1fr 1fr} }
+    .card{border-radius:16px; background:#0f172a; border:1px solid #1e293b; padding:14px}
+    .row{display:flex; align-items:center; gap:10px}
+    .row > *{flex:1}
+    label{display:block; font-size:12px; color:var(--muted); margin-bottom:6px}
+    input[type="range"]{width:100%}
+    .value{font-variant-numeric: tabular-nums}
+    .btns{display:flex; gap:10px; margin-top:10px}
+    button{
+      flex:1; padding:12px 14px; border-radius:12px; border:1px solid #1f2937;
+      font-weight:700; letter-spacing:.2px; background:#0b1220; color:var(--fg);
+    }
+    button.primary{background:linear-gradient(135deg, #0ea5e9, #22d3ee); color:#0b1220; border-color:#0ea5e96a}
+    button.stop{background:linear-gradient(135deg, #f87171, #fb7185); color:#230b0b; border-color:#f871716a}
+    button:disabled{opacity:.5}
+    .presets{display:flex; gap:8px; flex-wrap:wrap}
+    .preset{padding:8px 10px; border-radius:999px; border:1px solid #1f2937; background:#0b1220; font-size:12px}
+    .status{display:flex; justify-content:space-between; font-size:12px; color:var(--muted)}
+    .warn{margin-top:8px; font-size:12px; color:var(--danger)}
+    .ok{margin-top:8px; font-size:12px; color:#34d399}
+    .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
+    .tiny{font-size:11px; color:#94a3b8}
+  </style>
+</head>
+<body>
+  <main class="app" id="app">
+    <h1>手机按摩（Vibration API Demo）</h1>
+
+    <div class="grid">
+      <section class="card">
+        <div class="presets" aria-label="预设">
+          <button class="preset" data-preset="gentle">轻柔</button>
+          <button class="preset" data-preset="medium">标准</button>
+          <button class="preset" data-preset="strong">强力</button>
+          <button class="preset" data-preset="random">随机脉冲</button>
+        </div>
+
+        <div style="height:8px"></div>
+
+        <div class="row">
+          <div>
+            <label for="total">总时长（秒）</label>
+            <input id="total" type="range" min="5" max="900" step="5" value="120" />
+            <div class="status"><span>5s</span><span class="value" id="totalVal">120s</span><span>900s</span></div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="pulse">单次震动时长（毫秒）</label>
+            <input id="pulse" type="range" min="30" max="2000" step="10" value="200" />
+            <div class="status"><span>30ms</span><span class="value" id="pulseVal">200ms</span><span>2000ms</span></div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="rest">间隔休息（毫秒）</label>
+            <input id="rest" type="range" min="0" max="2000" step="10" value="150" />
+            <div class="status"><span>0ms</span><span class="value" id="restVal">150ms</span><span>2000ms</span></div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="repeat">每轮脉冲次数（每轮 = 震动+休息）</label>
+            <input id="repeat" type="range" min="1" max="20" step="1" value="6" />
+            <div class="status"><span>1</span><span class="value" id="repeatVal">6</span><span>20</span></div>
+          </div>
+        </div>
+
+        <div class="btns">
+          <button id="start" class="primary">开始</button>
+          <button id="stop" class="stop" disabled>停止</button>
+        </div>
+
+        <div id="supportMsg" class="warn" hidden></div>
+        <div class="tiny">提示：在 Android Chrome 中效果最佳；iOS/Safari 不支持震动 API。</div>
+      </section>
+
+      <section class="card">
+        <label>运行状态</label>
+        <div class="row">
+          <div>
+            <div class="status"><span>已运行</span><span class="value mono" id="elapsed">00:00</span></div>
+            <div class="status"><span>剩余</span><span class="value mono" id="remain">--:--</span></div>
+          </div>
+        </div>
+        <div style="height:8px"></div>
+        <div class="row">
+          <div>
+            <label>当前波形（毫秒）</label>
+            <div id="pattern" class="mono tiny">[200, 150] × 6（循环组成一轮）</div>
+          </div>
+        </div>
+        <div id="lockMsg" class="ok" hidden>已申请屏幕常亮（Wake Lock）。</div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    // 工具函数
+    const $ = sel => document.querySelector(sel);
+    const mmss = s => {
+      s = Math.max(0, Math.floor(s));
+      const m = Math.floor(s/60), ss = s%60;
+      return `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+    };
+
+    const ui = {
+      total: $("#total"), pulse: $("#pulse"), rest: $("#rest"), repeat: $("#repeat"),
+      totalVal: $("#totalVal"), pulseVal: $("#pulseVal"), restVal: $("#restVal"), repeatVal: $("#repeatVal"),
+      start: $("#start"), stop: $("#stop"),
+      elapsed: $("#elapsed"), remain: $("#remain"), pattern: $("#pattern"),
+      supportMsg: $("#supportMsg"), lockMsg: $("#lockMsg")
+    };
+
+    // 初始值显示
+    const syncLabels = () => {
+      ui.totalVal.textContent = ui.total.value + "s";
+      ui.pulseVal.textContent = ui.pulse.value + "ms";
+      ui.restVal.textContent  = ui.rest.value + "ms";
+      ui.repeatVal.textContent= ui.repeat.value;
+      ui.pattern.textContent = `[${ui.pulse.value}, ${ui.rest.value}] × ${ui.repeat.value}（循环组成一轮）`;
+    };
+    ["input","change"].forEach(evt=>{
+      [ui.total, ui.pulse, ui.rest, ui.repeat].forEach(el=> el.addEventListener(evt, syncLabels));
+    });
+    syncLabels();
+
+    // 兼容性提示
+    const vibrateSupported = typeof navigator !== "undefined" && typeof navigator.vibrate === "function";
+    if (!vibrateSupported) {
+      ui.supportMsg.hidden = false;
+      ui.supportMsg.textContent = "当前浏览器不支持振动（navigator.vibrate）。建议使用 Android 上的 Chrome/Edge/Firefox。";
+    }
+
+    // 屏幕常亮（Wake Lock），可选
+    let wakeLock = null;
+    async function requestWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+          ui.lockMsg.hidden = false;
+          wakeLock.addEventListener('release', () => { ui.lockMsg.hidden = true; });
+          document.addEventListener('visibilitychange', async () => {
+            if (document.visibilityState === 'visible') {
+              try { wakeLock = await navigator.wakeLock.request('screen'); ui.lockMsg.hidden = false; } catch {}
+            }
+          });
+        }
+      } catch {}
+    }
+
+    // 运行控制
+    let running = false;
+    let startTs = 0;
+    let elapsedTimer = null;
+    let loopHandle = null;
+
+    // 生成一轮脉冲的波形（例如 [pulse, rest, pulse, rest, ...]）
+    function buildWaveform(pulseMs, restMs, count) {
+      const arr = [];
+      for (let i=0;i<count;i++){
+        arr.push(pulseMs);
+        if (i !== count-1 || restMs>0) arr.push(restMs);
+      }
+      return arr;
+    }
+
+    // 随机预设：生成轻微抖动序列
+    function randomPulseSeq() {
+      const n = Math.floor(4 + Math.random()*8); // 4~11 个脉冲
+      const seq = [];
+      for (let i=0;i<n;i++){
+        const p = Math.floor(80 + Math.random()*260);  // 80~340ms
+        const r = Math.floor(Math.random()*220);       // 0~220ms
+        seq.push(p, r);
+      }
+      if (seq[seq.length-1] === 0) seq.pop(); // 末尾休息可省略
+      return seq;
+    }
+
+    function start() {
+      if (running) return;
+      if (!vibrateSupported) return;
+
+      running = true;
+      ui.start.disabled = true;
+      ui.stop.disabled = false;
+      startTs = Date.now();
+      const totalSeconds = parseInt(ui.total.value, 10);
+
+      requestWakeLock();
+
+      // 定时刷新计时
+      ui.elapsed.textContent = "00:00";
+      ui.remain.textContent = mmss(totalSeconds);
+      clearInterval(elapsedTimer);
+      elapsedTimer = setInterval(()=>{
+        const elapsedSec = Math.floor((Date.now() - startTs)/1000);
+        ui.elapsed.textContent = mmss(elapsedSec);
+        const remain = totalSeconds - elapsedSec;
+        ui.remain.textContent = mmss(remain);
+        if (remain <= 0) {
+          stop(); // 时间到
+        }
+      }, 250);
+
+      // 主循环：按一轮一轮地 vibrate
+      const pulseMs = parseInt(ui.pulse.value,10);
+      const restMs  = parseInt(ui.rest.value,10);
+      const count   = parseInt(ui.repeat.value,10);
+      const baseWave = buildWaveform(pulseMs, restMs, count);
+
+      // 每一轮的总时间
+      const waveSum = baseWave.reduce((a,b)=>a+b,0);
+
+      // 用 setTimeout 链式调度，避免与 vibrate 的内部计时冲突
+      const runLoop = () => {
+        if (!running) return;
+
+        // 如果随机模式按钮最后被点击（data-rand 一次性标志）
+        const randOnce = app.dataset.rand === "1";
+        let wave = baseWave;
+        if (randOnce) {
+          wave = randomPulseSeq();
+          app.dataset.rand = "0";
+          ui.pattern.textContent = `随机一轮：[${wave.join(", ")}] （毫秒）`;
+        }
+
+        navigator.vibrate(wave);
+        // 下一轮
+        const delay = wave.reduce((a,b)=>a+b,0);
+        loopHandle = setTimeout(runLoop, delay);
+      };
+
+      // 先执行一轮
+      navigator.vibrate(baseWave);
+      loopHandle = setTimeout(runLoop, waveSum);
+    }
+
+    function stop() {
+      if (!running) return;
+      running = false;
+      ui.start.disabled = false;
+      ui.stop.disabled = true;
+      clearInterval(elapsedTimer);
+      clearTimeout(loopHandle);
+      loopHandle = null;
+      if (vibrateSupported) navigator.vibrate(0);
+      if (wakeLock) { try { wakeLock.release(); } catch {} wakeLock = null; }
+    }
+
+    ui.start.addEventListener('click', start);
+    ui.stop.addEventListener('click', stop);
+
+    // 预设
+    document.querySelectorAll('.preset').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const p = btn.dataset.preset;
+        if (p === 'gentle') { ui.pulse.value=120; ui.rest.value=180; ui.repeat.value=6; ui.total.value=90; }
+        if (p === 'medium') { ui.pulse.value=200; ui.rest.value=150; ui.repeat.value=8; ui.total.value=120; }
+        if (p === 'strong') { ui.pulse.value=350; ui.rest.value=120; ui.repeat.value=10; ui.total.value=150; }
+        if (p === 'random') { app.dataset.rand = "1"; } // 下一轮随机
+        syncLabels();
+      });
+    });
+
+    // 用户离开时安全停止
+    window.addEventListener('pagehide', stop);
+    window.addEventListener('visibilitychange', ()=>{ if (document.hidden) stop(); });
+  </script>
+</body>
+</html>
